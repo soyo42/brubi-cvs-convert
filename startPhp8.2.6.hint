@@ -1,0 +1,1 @@
+docker run -d -p 8008:80 --name my-apache-php-app -v "$PWD":/var/www/html php:8.2.6-apache-bullseye

@@ -1,0 +1,6 @@
+*xls
+*csv
+*.git
+web/composer*
+web/*-tmp
+web/vendor
