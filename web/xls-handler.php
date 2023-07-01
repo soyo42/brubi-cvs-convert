@@ -4,6 +4,7 @@ if (array_key_exists('debug', $_REQUEST)) {
 } else {
     $debug_only = false;
 }
+
 // printf("debug_only : [%b] <br/>", $debug_only);
 // print_r($_REQUEST);
 // exit();
@@ -13,6 +14,7 @@ if (array_key_exists('debug', $_REQUEST)) {
 // printf("jahoda $val\n");
 
 require 'vendor/autoload.php';
+require 'util.php';
 
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
 use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
@@ -20,93 +22,147 @@ use PhpOffice\PhpSpreadsheet\IOFactory;
 use PhpOffice\PhpSpreadsheet\Worksheet\ColumnCellIterator;
 use PhpOffice\PhpSpreadsheet\Worksheet\RowCellIterator;
 use PhpOffice\PhpSpreadsheet\Shared\Date as XlsDate;
+use PhpOffice\PhpSpreadsheet\Cell\DataType;
 
 use PhpOffice\PhpSpreadsheet\Reader\Csv as CsvReader;
 
-$sadzby_xls = './sadzby_DPH_s_predkontaciou.xls';
+$sadzby_csv = './sadzby_DPH_s_predkontaciou.csv';
 $template_xls = './result_template.xls';
+// will be acquired via request
 $items_file = './EtsySoldOrderItems2023-3.csv';
 $orders_file = './EtsySoldOrders2023-3.csv';
+$refund_statements_file = './etsy_statement_2023_3.csv';
 
-// load sadzby via xls file
-$sadzby_spreadsheet = IOFactory::load($sadzby_xls);
+// load sadzby via csv file
+$sadzby_reader = new CsvReader();
+$sadzby_reader->setDelimiter(';')
+    ->setEnclosure('"')
+    ->setSheetIndex(0);
+$sadzby_spreadsheet = $sadzby_reader->load($sadzby_csv);
+
 // load template xls
 $template_spreadsheet = IOFactory::load($template_xls);
+$template_active_worksheet = $template_spreadsheet->getActiveSheet();
+
+
 
 if ($debug_only) print("<pre>\n");
 
-// read sadzby
-$sadzby_active_worksheet = $sadzby_spreadsheet->getActiveSheet();
-$SADZBY = array();
-for ($i = 1; true; $i++) {
-    $country = $sadzby_active_worksheet->getCell("A$i")->getValue();
-    $country_isocode = $sadzby_active_worksheet->getCell("B$i")->getValue();
-    if ($country == null) {
-        break;
-    }
-    $c = $sadzby_active_worksheet->getCell("C$i")->getValue();
-    $d = $sadzby_active_worksheet->getCell("D$i")->getValue();
-    // print("country: $country [$country_isocode] \n");
-    $SADZBY[$country_isocode] = array('C' => $c, 'D' => $d, 'country' => $country);
-    // $width = 15 - mb_strlen($country) + strlen($country);
-    // printf("%-{$width}s :: $c -- $d\n", $country);
-}
 
+// read sadzby + staty
+$sadzby_active_worksheet = $sadzby_spreadsheet->getActiveSheet();
+$SADZBY = sadzby_to_map($sadzby_active_worksheet);
 if ($debug_only) {
     print("--sadzby--\n");
     foreach ($SADZBY as $key => $value) {
-        printf("@@ %s [%s | %s] -- %s\n", $key, $value['C'], $value['D'], $value['country']);
+        printf("@@ %-15s [%2s | %4s] -- %s\n", $key, $value['C'], $value['D'], $value['country_isocode']);
     }
 }
 
+
 if ($debug_only) print("----\n");
-// load csv file
+// load csv files (delimiter = ',')
 $reader = new CsvReader();
 $reader->setDelimiter(',')
     ->setEnclosure('"')
     ->setSheetIndex(0);
 
-// process orders and items
-$orders_speadsheet = $reader->load($orders_file);
-$orders_active_worksheet = $orders_speadsheet->getActiveSheet();
-$template_active_worksheet = $template_spreadsheet->getActiveSheet();
+// process orders, items, refunds
+$orders_active_worksheet = $reader->load($orders_file)->getActiveSheet();
+$order_items_active_worksheet = $reader->load($items_file)->getActiveSheet();
+$refund_statements_worksheet = $reader->load($refund_statements_file)->getActiveSheet();
 
-$colIterator1 = new ColumnCellIterator($orders_active_worksheet, 'A', 2);
-foreach ($colIterator1 as $cell) {
+$items_map = order_items_to_map($order_items_active_worksheet);
+$refund_statements_info = analyze_refund_statements($refund_statements_worksheet);
+if ($debug_only) printf("--- refund stats: %s ---\n\n", $refund_statements_info->statistics);
+
+
+$row = 0;
+$orders_coliterator = new ColumnCellIterator($orders_active_worksheet, 'A', 2);
+foreach ($orders_coliterator as $cell) {
     $row = $cell->getRow();
-    if ($debug_only) printf("--- %03d %s ---\n", $row, $cell->getValue());
+    $country_name = $orders_active_worksheet->getCell('O'.$row)->getValue();
+    $order_id = $orders_active_worksheet->getCell('B'.$row)->getValue();
+    
+    if ($debug_only) printf("--- source: %03d %s orderId[%s] --- ", $row, $cell->getValue(), $order_id);
 
-    $target_row = $row + 3;
-    $template_active_worksheet->insertNewRowBefore($target_row);
-    $template_active_worksheet->getRowDimension($target_row)->setRowHeight(15);
-
+    $target_row = $row + 2;
+    prepare_template_row($template_active_worksheet, $target_row);
 
     $cell_date = DateTime::createFromFormat('m/d/y', $cell->getValue());
 
     if ($debug_only) {
-        printf("%s -> %s -- %s\n",
+        printf("target: type[%s] -> %s\n",
                $template_active_worksheet->getCell('A'.($target_row-1))->getDataType(),
-               $cell_date->format('m/d/Y'),
-               XlsDate::PHPToExcel($cell_date)
+               $cell_date->format('m/d/Y')
         );
+    }
+
+    // resolve sadzba
+    if (array_key_exists($country_name, $SADZBY)) {
+        $sadzba = $SADZBY[$country_name];
+    } else {
+        $sadzba = $SADZBY['DEFAULT'];
+    }
+
+    // resove item name
+    if (array_key_exists($order_id, $items_map)) {
+        $item_name = $items_map[$order_id];
+    } else {
+        $item_name = '?';
+    }
+
+    // process partial refunds in now
+    $comment = null;
+    $price = $orders_active_worksheet->getCell('X'.$row)->getValue();
+    if (array_key_exists($order_id, $refund_statements_info->partial_refunds_now)) {
+        $comment = 'ciastocny refund';
+        $refund_price = $refund_statements_info->partial_refunds_now[$order_id][0];
+        if ($debug_only) printf("partial refund @ $order_id: $price $refund_price\n");
+        $price += $refund_price;
     }
     
     $template_active_worksheet->setCellValue('A'.$target_row, XlsDate::PHPToExcel($cell_date));  // date
-    $template_active_worksheet->setCellValue('B'.$target_row, $orders_active_worksheet->getCell('B'.$row)->getValue());  // order no.
+    $template_active_worksheet->setCellValue('B'.$target_row, $order_id);  // order no.
     $template_active_worksheet->setCellValue('C'.$target_row, $orders_active_worksheet->getCell('D'.$row)->getValue());  // full name
-    //  item name
+    $template_active_worksheet->setCellValue('D'.$target_row, $item_name);  // full name
     $template_active_worksheet->setCellValue('E'.$target_row, $orders_active_worksheet->getCell('G'.$row)->getValue());  // number of items
     $template_active_worksheet->setCellValue('F'.$target_row, $orders_active_worksheet->getCell('J'.$row)->getValue());  // street name
     $template_active_worksheet->setCellValue('G'.$target_row, $orders_active_worksheet->getCell('L'.$row)->getValue());  // city
     $template_active_worksheet->setCellValue('H'.$target_row, $orders_active_worksheet->getCell('N'.$row)->getValue());  // zip code
     $template_active_worksheet->setCellValue('I'.$target_row, $orders_active_worksheet->getCell('O'.$row)->getValue());  // country
     $template_active_worksheet->setCellValue('J'.$target_row, $orders_active_worksheet->getCell('P'.$row)->getValue());  // currency
-    // $template_active_worksheet->setCellValue('K'.$target_row, $orders_active_worksheet->getCell('D'.$row)->getValue());  // OSS - <druh dodani hlavicka>
-    // $template_active_worksheet->setCellValue('L'.$target_row, $orders_active_worksheet->getCell('D'.$row)->getValue());  // OSS - country
-    $template_active_worksheet->setCellValue('M'.$target_row, $orders_active_worksheet->getCell('X'.$row)->getValue());  // OSS - base rate
-    // $template_active_worksheet->setCellValue('N'.$target_row, $orders_active_worksheet->getCell('D'.$row)->getValue());  // VAT rate [%]
-    // $template_active_worksheet->setCellValue('O'.$target_row, $orders_active_worksheet->getCell('D'.$row)->getValue());  // <predkontacia>
+    $template_active_worksheet->setCellValue('K'.$target_row, $sadzba['E']);  // OSS - <druh dodani hlavicka>
+    $template_active_worksheet->setCellValue('L'.$target_row, $sadzba['country_isocode']);  // OSS - country
+    $template_active_worksheet->setCellValue('M'.$target_row, $price);  // OSS - base rate
+    $template_active_worksheet->setCellValue('N'.$target_row, $sadzba['C']);  // VAT rate [%]
+    $template_active_worksheet->setCellValue('O'.$target_row, $sadzba['D']);  // <predkontacia>
+    if ($comment != null) {
+            $template_active_worksheet->setCellValue('P'.$target_row, $comment);  // comment
+    }
 }
+
+
+// insert empty row
+$template_active_worksheet->insertNewRowBefore($target_row);
+$target_row += 1;
+
+// process full refunds in past
+foreach ($refund_statements_info->full_refunds_in_past as $order_id => $record) {
+    $target_row += 1;
+    prepare_template_row($template_active_worksheet, $target_row);
+    if ($debug_only) print("refund [$order_id] date: {$record[1]} -> $record[0]\n");
+    fill_refund_row($template_active_worksheet, $target_row, $record, $order_id, 'plny refund');
+}
+
+// process partial refunds in past
+foreach ($refund_statements_info->partial_refunds_in_past as $order_id => $record) {
+    $target_row += 1;
+    prepare_template_row($template_active_worksheet, $target_row);
+    if ($debug_only) print("partial refund [$order_id] date: {$record[1]} -> $record[0]\n");
+    fill_refund_row($template_active_worksheet, $target_row, $record, $order_id, 'ciastocny refund');
+}
+
 
 if ($debug_only) print("</pre>\n");
 
