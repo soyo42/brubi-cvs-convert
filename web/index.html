@@ -3,6 +3,12 @@
 <head>
   <meta charset="utf-8">
   <title>PHP: Uploading multiple files</title>
+  <script>
+    function cleanInput(inputId) {	
+	document.getElementById(inputId).value=''
+	return false;
+    }
+  </script>
 </head>
 <body>
   <h1>Spracovanie orders, order-items, refund-statements</h1>
@@ -14,25 +20,37 @@
 	  <label for="orders-file">orders file</label>
 	</td>
 	<td>
-	  <input id="orders-file" name="userfile[]" type="file" /><br />
+	  <input id="orders-file" name="userfile[]" type="file" />
+	</td>
+	<td>
+	  <button onclick="return cleanInput('orders-file');" >x</button>
 	</td>
       </tr>
+
       <tr>
 	<td>
 	  <label for="order-items-file">order items file</label>
 	</td>
 	<td>
-	  <input id="order-items-file" name="userfile[]" type="file" /><br />
+	  <input id="order-items-file" name="userfile[]" type="file" />
+	</td>
+	<td>
+	  <button onclick="return cleanInput('order-items-file');" >x</button>
 	</td>
       </tr>
+
       <tr>	  
 	<td>
 	  <label for="refund-statements-file">refund statements file</label>
 	</td>
 	<td>
-	  <input id="refund-statements-file" name="userfile[]" type="file" /><br />
+	  <input id="refund-statements-file" name="userfile[]" type="file" />
+	</td>
+	<td>
+	  <button onclick="return cleanInput('refund-statements-file');" >x</button>
 	</td>
       </tr>
+
       <tr>	  
 	<td>
 	  <label for="debug-only">debug only</label>
