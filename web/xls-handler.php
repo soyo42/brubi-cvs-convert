@@ -1,8 +1,41 @@
 <?php
-if (array_key_exists('debug', $_REQUEST)) {
-    $debug_only = boolval($_REQUEST['debug']);
+$debug_only = boolval(isset($_POST['debug-only']));
+if (! $debug_only) {
+    // fallback to GET request
+    $debug_only = boolval(isset($_REQUEST['debug']));
+}
+
+// if ($debug_only) {
+//     print('debug yes!');
+// } else {
+//     print('debug no!');
+// }       
+// exit;
+
+if(isset($_POST['submit'])) {
+    if (isset($_FILES['userfile'])) {
+        $countfiles = count($_FILES['userfile']['name']);
+        if ($countfiles != 3) {
+            exit("potrebujeme presne 3 subory, ziskali sme $countfiles}");
+        }
+
+        if ($debug_only) {
+            $idx = 0;
+            foreach ($_FILES['userfile']['name'] as $fileName) {
+                printf("received file name: %s --> %s<br/>\n", $fileName, $_FILES['userfile']['tmp_name'][$idx]);
+                $idx += 1;
+            }
+        }
+
+        $orders_file = $_FILES['userfile']['tmp_name'][0];
+        $items_file = $_FILES['userfile']['tmp_name'][1];
+        $refund_statements_file = $_FILES['userfile']['tmp_name'][2];
+    }
 } else {
-    $debug_only = false;
+    if ($debug_only) print("<b>DEMO - with static files</b><br>\n");
+    $orders_file = './EtsySoldOrders2023-3.csv';
+    $items_file = './EtsySoldOrderItems2023-3.csv';
+    $refund_statements_file = './etsy_statement_2023_3.csv';
 }
 
 // printf("debug_only : [%b] <br/>", $debug_only);
@@ -23,15 +56,10 @@ use PhpOffice\PhpSpreadsheet\Worksheet\ColumnCellIterator;
 use PhpOffice\PhpSpreadsheet\Worksheet\RowCellIterator;
 use PhpOffice\PhpSpreadsheet\Shared\Date as XlsDate;
 use PhpOffice\PhpSpreadsheet\Cell\DataType;
-
 use PhpOffice\PhpSpreadsheet\Reader\Csv as CsvReader;
 
 $sadzby_csv = './sadzby_DPH_s_predkontaciou.csv';
 $template_xls = './result_template.xls';
-// will be acquired via request
-$items_file = './EtsySoldOrderItems2023-3.csv';
-$orders_file = './EtsySoldOrders2023-3.csv';
-$refund_statements_file = './etsy_statement_2023_3.csv';
 
 // load sadzby via csv file
 $sadzby_reader = new CsvReader();
