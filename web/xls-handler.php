@@ -19,12 +19,13 @@ if(isset($_POST['submit'])) {
             exit("potrebujeme presne 3 subory, ziskali sme $countfiles}");
         }
 
-        if ($debug_only) {
-            $idx = 0;
-            foreach ($_FILES['userfile']['name'] as $fileName) {
-                printf("received file name: %s --> %s<br/>\n", $fileName, $_FILES['userfile']['tmp_name'][$idx]);
-                $idx += 1;
+        $idx = 0;
+        foreach ($_FILES['userfile']['name'] as $fileName) {
+            if ($fileName == '') {
+                exit(sprintf("chyba subor c. %d", $idx+1));
             }
+            if ($debug_only) printf("received file name: %s --> %s<br/>\n", $fileName, $_FILES['userfile']['tmp_name'][$idx]);
+            $idx += 1;
         }
 
         $orders_file = $_FILES['userfile']['tmp_name'][0];
