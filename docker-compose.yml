@@ -4,11 +4,6 @@ services:
   php-apache:
    container_name: brubi-php-apache
    build: .
-   # environment:
-   #   POSTGRES_USER: ecasenka
-   #   POSTGRES_PASSWORD: EcasenkaApp0909
-   #   POSTGRES_DB: postgres
-   #   PGDATA: /data/postgres
    volumes:
      - ./web:/var/www/html
    ports:
