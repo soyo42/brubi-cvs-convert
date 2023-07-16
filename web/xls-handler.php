@@ -180,6 +180,12 @@ foreach($partial_refund_rows as $key => $partial_refund_row) {
     change_row_background_color($template_active_worksheet, $partial_refund_row, 'fff46d');
 }
 
+
+// insert empty row before past refunds
+$target_row += 1;
+$template_active_worksheet->insertNewRowBefore($target_row);
+
+
 // process full refunds in past
 foreach ($refund_statements_info->full_refunds_in_past as $order_id => $record) {
     $target_row += 1;
