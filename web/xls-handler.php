@@ -5,12 +5,15 @@ if (! $debug_only) {
     $debug_only = boolval(isset($_REQUEST['debug']));
 }
 
+require 'util.php';
+
 // if ($debug_only) {
 //     print('debug yes!');
 // } else {
 //     print('debug no!');
 // }       
 // exit;
+
 
 if(isset($_POST['submit'])) {
     if (isset($_FILES['userfile'])) {
@@ -19,14 +22,14 @@ if(isset($_POST['submit'])) {
             exit("potrebujeme presne 3 subory, ziskali sme $countfiles}");
         }
 
+        check_uploaded_file_names($_FILES['userfile']['name']);
+
         $idx = 0;
         foreach ($_FILES['userfile']['name'] as $fileName) {
-            if ($fileName == '') {
-                exit(sprintf("chyba subor c. %d", $idx+1));
-            }
             if ($debug_only) printf("received file name: %s --> %s<br/>\n", $fileName, $_FILES['userfile']['tmp_name'][$idx]);
             $idx += 1;
         }
+        
 
         $orders_file = $_FILES['userfile']['tmp_name'][0];
         $items_file = $_FILES['userfile']['tmp_name'][1];
@@ -48,7 +51,6 @@ if(isset($_POST['submit'])) {
 // printf("jahoda $val\n");
 
 require 'vendor/autoload.php';
-require 'util.php';
 
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
 use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
@@ -107,6 +109,7 @@ if ($debug_only) printf("--- refund stats: %s ---\n\n", $refund_statements_info-
 
 
 $row = 0;
+$partial_refund_rows = [];
 $orders_coliterator = new ColumnCellIterator($orders_active_worksheet, 'A', 2);
 foreach ($orders_coliterator as $cell) {
     $row = $cell->getRow();
@@ -123,7 +126,7 @@ foreach ($orders_coliterator as $cell) {
     if ($debug_only) {
         printf("target: type[%s] -> %s\n",
                $template_active_worksheet->getCell('A'.($target_row-1))->getDataType(),
-               $cell_date->format('m/d/Y')
+               $cell_date->format('d.m.Y')
         );
     }
 
@@ -134,7 +137,7 @@ foreach ($orders_coliterator as $cell) {
         $sadzba = $SADZBY['DEFAULT'];
     }
 
-    // resove item name
+    // resolve item name
     if (array_key_exists($order_id, $items_map)) {
         $item_name = $items_map[$order_id];
     } else {
@@ -149,6 +152,7 @@ foreach ($orders_coliterator as $cell) {
         $refund_price = $refund_statements_info->partial_refunds_now[$order_id][0];
         if ($debug_only) printf("partial refund @ $order_id: $price $refund_price\n");
         $price += $refund_price;
+        $partial_refund_rows []= $target_row;
     }
     
     $template_active_worksheet->setCellValue('A'.$target_row, XlsDate::PHPToExcel($cell_date));  // date
@@ -167,29 +171,32 @@ foreach ($orders_coliterator as $cell) {
     $template_active_worksheet->setCellValue('N'.$target_row, $sadzba['C']);  // VAT rate [%]
     $template_active_worksheet->setCellValue('O'.$target_row, $sadzba['D']);  // <predkontacia>
     if ($comment != null) {
-            $template_active_worksheet->setCellValue('P'.$target_row, $comment);  // comment
+        $template_active_worksheet->setCellValue('P'.$target_row, $comment);  // comment
     }
 }
 
-
-// insert empty row
-$template_active_worksheet->insertNewRowBefore($target_row);
-$target_row += 1;
+// color modified rows (changed through partial refund)
+foreach($partial_refund_rows as $key => $partial_refund_row) {
+    change_row_background_color($template_active_worksheet, $partial_refund_row, 'fff46d');
+}
 
 // process full refunds in past
 foreach ($refund_statements_info->full_refunds_in_past as $order_id => $record) {
     $target_row += 1;
     prepare_template_row($template_active_worksheet, $target_row);
-    if ($debug_only) print("refund [$order_id] date: {$record[1]} -> $record[0]\n");
+    if ($debug_only) printf("refund [$order_id] date: %s -> $record[0]\n", $record[1]->format('d.m.Y'));
     fill_refund_row($template_active_worksheet, $target_row, $record, $order_id, 'plny refund');
+    change_row_background_color($template_active_worksheet, $target_row, 'ff0000');
+    
 }
 
 // process partial refunds in past
 foreach ($refund_statements_info->partial_refunds_in_past as $order_id => $record) {
     $target_row += 1;
     prepare_template_row($template_active_worksheet, $target_row);
-    if ($debug_only) print("partial refund [$order_id] date: {$record[1]} -> $record[0]\n");
+    if ($debug_only) printf("partial refund [$order_id] date: %s -> $record[0]\n", $record[1]->format('d.m.Y'));
     fill_refund_row($template_active_worksheet, $target_row, $record, $order_id, 'ciastocny refund');
+    change_row_background_color($template_active_worksheet, $target_row, 'ff6d6d');
 }
 
 

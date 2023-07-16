@@ -1,8 +1,19 @@
 <?php
 
 use PhpOffice\PhpSpreadsheet\Worksheet\ColumnCellIterator;
+use PhpOffice\PhpSpreadsheet\Worksheet\RowCellIterator;
 use PhpOffice\PhpSpreadsheet\Shared\Date as XlsDate;
+use PhpOffice\PhpSpreadsheet\Style\Fill;
 require 'RefundStatementInfo.class.php';
+
+
+define('FILE_PATTERNS',
+       [
+           0 => '/^EtsySoldOrders([0-9]{4})-([0-9]{1,2}).csv$/',
+           1 => '/^EtsySoldOrderItems([0-9]{4})-([0-9]{1,2}).csv$/',
+           2 => '/^etsy_statement_([0-9]{4})_([0-9]{1,2}).csv$/'
+       ]
+);
 
 
 function prepare_template_row($worksheet, $target_row) {
@@ -10,11 +21,62 @@ function prepare_template_row($worksheet, $target_row) {
     $worksheet->getRowDimension($target_row)->setRowHeight(15);
     $worksheet->getStyle('A'.$target_row)
                               ->getNumberFormat()
-                              ->setFormatCode('mm/dd/yyyy');
+                              ->setFormatCode('dd.mm.YYYY');
 
     $worksheet->getStyle('M'.$target_row)
               ->getNumberFormat()
               ->setFormatCode('0.00');
+}
+
+
+function change_row_background_color($worksheet, $target_row, $colorRgb) {
+    $rowIterator = new RowCellIterator($worksheet, $target_row, 'A', 'P');
+    foreach ($rowIterator as $cell) {
+        $column = $cell->getColumn();
+        $worksheet->getStyle($column.$target_row)
+                  ->getFill()
+                  ->setFillType(Fill::FILL_SOLID)
+                  ->getStartColor()
+                  ->setARGB($colorRgb);
+    }
+}
+
+
+function check_uploaded_file_names($fileNames) {
+    $error_messages = '';
+    $used_years = [];
+    $used_months = [];
+    
+    $idx = 0;
+    foreach ($fileNames as $fileName) {
+        if (array_key_exists($idx, FILE_PATTERNS)) {
+            $pattern = FILE_PATTERNS[$idx];
+            $found = preg_match($pattern, $fileName, $matches);
+            if (! $found) {
+                $error_messages .= sprintf('nespravny subor [%s]\n&nbsp;expected pattern: %s\n', $fileName, $pattern);
+            } else {
+                $used_years []= $matches[1];
+                $used_months []= $matches[2];
+            }
+        } else {
+            $error_messages .= 'unexpected index -> {$idx}\n';
+        }
+        $idx += 1;
+    }
+
+    foreach ($used_years as $key => $year) {
+        $month = $used_months[$key];
+        if ($year != $used_years[0]) {
+            $error_messages .= sprintf('nespravny rok [%s]: %s\n &nbsp;ocakavany: %s\n', $fileNames[$key], $year, $used_years[0]);
+        }
+        if ($month != $used_months[0]) {
+            $error_messages .= sprintf('nespravny mesiac [%s]: %s\n &nbsp;ocakavany: %s\n', $fileNames[$key], $month, $used_months[0]);
+        }
+    }
+
+    if ($error_messages != '') {
+        exit(str_replace('\n', "<br/>\n",  $error_messages));
+    }
 }
 
 
@@ -23,7 +85,7 @@ function fill_refund_row($worksheet, $target_row, $record, $order_id, $comment) 
     $worksheet->setCellValue('B'.$target_row, $order_id);  // order no.
     $worksheet->setCellValue('M'.$target_row, $record[0]);  // OSS - base rate
     $worksheet->setCellValue('P'.$target_row, $comment);  // comment
-    
+
 }
 
 
@@ -74,7 +136,7 @@ function analyze_refund_statements($refund_statements_worksheet) {
         $row = $cell->getRow();
         $title = $cell->getValue();
         $raw_price = $refund_statements_worksheet->getCell('F'.($row))->getValue();
-        
+
         $date = $refund_statements_worksheet->getCell('A'.($row))->getValue();
         if (preg_match($REFUND_PATTERN, $title, $matches)) {
             $refunds[$matches[1]] = _build_record($title, $raw_price, $date);
@@ -111,7 +173,7 @@ function analyze_refund_statements($refund_statements_worksheet) {
             $info->partial_refunds_in_past[$order_id] = $record;
         }
     }
-        
+
     return $info;
 }
 
@@ -126,7 +188,7 @@ function _build_record($title, $raw_price, $date) {
         exit("failed to parse price in refund statement [$title]: '$raw_price'");
     }
 
-    $nice_date = DateTime::createFromFormat('d M, Y', $date)->format('m/d/Y');
+    $nice_date = DateTime::createFromFormat('d M, Y', $date);
     #printf("raw date: $date ---> %s\n", $nice_date);
     return [$price, $nice_date];
 }
