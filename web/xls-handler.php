@@ -210,8 +210,14 @@ if ($debug_only) print("</pre>\n");
 
 
 if (! $debug_only) {
+
+    $suffix = time();
+    if (preg_match(FILE_PATTERNS[0], $_FILES['userfile']['name'][0], $matches)) {
+        $suffix = sprintf('%s_%02d', $matches[1], intval($matches[2]));
+    }
+    
     header('Content-Type: application/vnd.ms-excel');
-    header('Content-Disposition: attachment;filename="processed_orders.xls"');
+    header(sprintf('Content-Disposition: attachment;filename="processed_orders__%s.xls"', $suffix));
     header('Cache-Control: max-age=0');
     // If you're serving to IE 9, then the following may be needed
     header('Cache-Control: max-age=1');
