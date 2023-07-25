@@ -154,6 +154,13 @@ foreach ($orders_coliterator as $cell) {
         $price += $refund_price;
         $partial_refund_rows []= $target_row;
     }
+
+    $oss_country = '';
+    $vat_rate = '';
+    if ($sadzba['D'] != 'em') {
+        $oss_country = $sadzba['country_isocode'];
+        $vat_rate = $sadzba['C'];
+    }
     
     $template_active_worksheet->setCellValue('A'.$target_row, XlsDate::PHPToExcel($cell_date));  // date
     $template_active_worksheet->setCellValue('B'.$target_row, $order_id);  // order no.
@@ -163,12 +170,12 @@ foreach ($orders_coliterator as $cell) {
     $template_active_worksheet->setCellValue('F'.$target_row, $orders_active_worksheet->getCell('J'.$row)->getValue());  // street name
     $template_active_worksheet->setCellValue('G'.$target_row, $orders_active_worksheet->getCell('L'.$row)->getValue());  // city
     $template_active_worksheet->setCellValue('H'.$target_row, $orders_active_worksheet->getCell('N'.$row)->getValue());  // zip code
-    $template_active_worksheet->setCellValue('I'.$target_row, $orders_active_worksheet->getCell('O'.$row)->getValue());  // country
+    $template_active_worksheet->setCellValue('I'.$target_row, $sadzba['country_isocode']);  // country (ISO code)
     $template_active_worksheet->setCellValue('J'.$target_row, $orders_active_worksheet->getCell('P'.$row)->getValue());  // currency
     $template_active_worksheet->setCellValue('K'.$target_row, $sadzba['E']);  // OSS - <druh dodani hlavicka>
-    $template_active_worksheet->setCellValue('L'.$target_row, $sadzba['country_isocode']);  // OSS - country
+    $template_active_worksheet->setCellValue('L'.$target_row, $oss_country);  // OSS - country (only if <predkontacia> != 'em')
     $template_active_worksheet->setCellValue('M'.$target_row, $price);  // OSS - base rate
-    $template_active_worksheet->setCellValue('N'.$target_row, $sadzba['C']);  // VAT rate [%]
+    $template_active_worksheet->setCellValue('N'.$target_row, $vat_rate);  // VAT rate [%]
     $template_active_worksheet->setCellValue('O'.$target_row, $sadzba['D']);  // <predkontacia>
     if ($comment != null) {
         $template_active_worksheet->setCellValue('P'.$target_row, $comment);  // comment
