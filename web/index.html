@@ -9,6 +9,11 @@
 	return false;
     }
   </script>
+  <style>
+    .fileInputCell {
+	width: 40em;
+    }
+  </style>  
 </head>
 <body>
   <h1>Spracovanie orders, order-items, refund-statements</h1>
@@ -19,7 +24,7 @@
 	<td>
 	  <label for="orders-file">EtsySoldOrdersRRRR-M.csv</label>
 	</td>
-	<td>
+	<td class="fileInputCell">
 	  <input id="orders-file" name="userfile[]" type="file" />
 	</td>
 	<td>
@@ -31,7 +36,7 @@
 	<td>
 	  <label for="order-items-file">EtsySoldOrderItemsRRRR-M.csv</label>
 	</td>
-	<td>
+	<td class="fileInputCell">
 	  <input id="order-items-file" name="userfile[]" type="file" />
 	</td>
 	<td>
@@ -43,7 +48,7 @@
 	<td>
 	  <label for="refund-statements-file">etsy_statement_RRRR_M.csv</label>
 	</td>
-	<td>
+	<td class="fileInputCell">
 	  <input id="refund-statements-file" name="userfile[]" type="file" />
 	</td>
 	<td>
