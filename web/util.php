@@ -123,19 +123,21 @@ function order_items_to_map($items_active_worksheet) {
 
 function analyze_refund_statements($refund_statements_worksheet) {
     $info = new RefundStatementInfo();
-    $REFUND_PATTERN = '/^Refund to buyer for Order #([0-9]+)$/';
-    $PARTIAL_REFUND_PATTERN = '/^Partial refund to buyer for Order #([0-9]+)$/';
+    $REFUND_PATTERN = '/^Refund (?:to buyer )?for Order #([0-9]+)$/';
+    $PARTIAL_REFUND_PATTERN = '/^Partial refund (?:to buyer )?for Order #([0-9]+)$/';
     $PAYMENT_PATTERN = '/^Payment for Order #([0-9]+)$/';
 
     $refunds = [];
     $partial_refunds = [];
     $payments = [];
+    $error_messages = [];
 
     $colIterator = new ColumnCellIterator($refund_statements_worksheet, 'C', 2);
     foreach ($colIterator as $cell) {
         $row = $cell->getRow();
         $title = $cell->getValue();
         $raw_price = $refund_statements_worksheet->getCell('F'.($row))->getValue();
+        $operation_type = $refund_statements_worksheet->getCell('B'.($row))->getValue();
 
         $date = $refund_statements_worksheet->getCell('A'.($row))->getValue();
         if (preg_match($REFUND_PATTERN, $title, $matches)) {
@@ -144,8 +146,18 @@ function analyze_refund_statements($refund_statements_worksheet) {
             $partial_refunds[$matches[1]] = _build_record($title, $raw_price, $date);
         } else if (preg_match($PAYMENT_PATTERN, $title, $matches)) {
             $payments[$matches[1]] = _build_record($title, $raw_price, $date);
+        } else {
+            if ($operation_type == 'Refund' or $operation_type == 'Sale') {
+                // mismatched refund | partial refund | payment
+                $error_messages []= "etsy_statement title mismatched (possible data loss), Date: $date Title: $title";
+            }
         }
     }
+
+    if (! empty($error_messages)) {
+        exit(join("<br/>\n", $error_messages));
+    }
+    
 
     $info->statistics = sprintf("ref: %s, paref: %s, pay: %s", sizeof($refunds), sizeof($partial_refunds), sizeof($payments));
 
