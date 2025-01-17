@@ -6,6 +6,7 @@ class RefundStatementInfo {
     public $full_refunds_in_past = [];
     public $partial_refunds_in_past = [];
     public $partial_refunds_now = [];
+    public $taxes = [];
 
 }
 
