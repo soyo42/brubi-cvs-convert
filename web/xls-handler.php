@@ -155,6 +155,13 @@ foreach ($orders_coliterator as $cell) {
         $partial_refund_rows []= $target_row;
     }
 
+    if (array_key_exists($order_id, $refund_statements_info->taxes)) {
+        $tax = $refund_statements_info->taxes[$order_id];
+        if ($debug_only) printf("tax @ $order_id: $tax\n");
+        $price += $tax;
+    }
+
+
     $oss_country = '';
     $vat_rate = '';
     if ($sadzba['D'] != 'em') {

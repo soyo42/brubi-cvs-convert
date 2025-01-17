@@ -126,10 +126,12 @@ function analyze_refund_statements($refund_statements_worksheet) {
     $REFUND_PATTERN = '/^Refund (?:to buyer )?for Order #([0-9]+)$/';
     $PARTIAL_REFUND_PATTERN = '/^Partial refund (?:to buyer )?for Order #([0-9]+)$/';
     $PAYMENT_PATTERN = '/^Payment for Order #([0-9]+)$/';
+    $TAX_PATTERN = '/^Sales tax paid by buyer/';
 
     $refunds = [];
     $partial_refunds = [];
     $payments = [];
+    $taxes = [];
     $error_messages = [];
 
     $colIterator = new ColumnCellIterator($refund_statements_worksheet, 'C', 2);
@@ -146,6 +148,12 @@ function analyze_refund_statements($refund_statements_worksheet) {
             $partial_refunds[$matches[1]] = _build_record($title, $raw_price, $date);
         } else if (preg_match($PAYMENT_PATTERN, $title, $matches)) {
             $payments[$matches[1]] = _build_record($title, $raw_price, $date);
+        } else if (preg_match($TAX_PATTERN, $title, $matches)) {
+            $tax_raw_price = $refund_statements_worksheet->getCell('H'.($row))->getValue();
+            $info_value = $refund_statements_worksheet->getCell('D'.($row))->getValue();
+            $order_no = explode('#', $info_value)[1];
+            $taxes[$order_no] = _read_raw_price($tax_raw_price);
+            // print("tax: $tax_raw_price, order_no: $order_no");
         } else {
             if ($operation_type == 'Refund' or $operation_type == 'Sale') {
                 // mismatched refund | partial refund | payment
@@ -159,7 +167,7 @@ function analyze_refund_statements($refund_statements_worksheet) {
     }
     
 
-    $info->statistics = sprintf("ref: %s, paref: %s, pay: %s", sizeof($refunds), sizeof($partial_refunds), sizeof($payments));
+    $info->statistics = sprintf("ref: %s, paref: %s, pay: %s, tax: %s", sizeof($refunds), sizeof($partial_refunds), sizeof($payments), sizeof($taxes));
 
     // process full refunds
     foreach ($refunds as $order_id => $record) {
@@ -186,11 +194,14 @@ function analyze_refund_statements($refund_statements_worksheet) {
         }
     }
 
+    // taxes
+    $info->taxes = $taxes;
+
     return $info;
 }
 
 
-function _build_record($title, $raw_price, $date) {
+function _read_raw_price($raw_price) {
     $PRICE_PATTERN = '/^-?[0-9.]+$/';
     $price_candidate = filter_var($raw_price, FILTER_SANITIZE_NUMBER_FLOAT, FILTER_FLAG_ALLOW_FRACTION);
     // printf("price candidate: $price_candidate [$title] \n");
@@ -199,9 +210,14 @@ function _build_record($title, $raw_price, $date) {
     } else {
         exit("failed to parse price in refund statement [$title]: '$raw_price'");
     }
+    return $price;
+}
 
+
+function _build_record($title, $raw_price, $date) {
+    $price = _read_raw_price($raw_price);
     $nice_date = DateTime::createFromFormat('d M, Y', $date);
-    #printf("raw date: $date ---> %s\n", $nice_date);
+    // printf("raw date: $date ---> %s\n", $nice_date);
     return [$price, $nice_date];
 }
 
